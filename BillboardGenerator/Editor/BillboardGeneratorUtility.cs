@@ -14,7 +14,7 @@ namespace Ardenfall.Utilities
         public static void GenerateBillboard(BillboardAsset asset)
         {
             //Destroy textures
-            foreach(var texture in asset.generatedTextures)
+            foreach (var texture in asset.generatedTextures)
                 GameObject.DestroyImmediate(texture, true);
 
             AssetDatabase.SaveAssets();
@@ -71,12 +71,12 @@ namespace Ardenfall.Utilities
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            GetObjectVisual(asset, out Mesh prefabMesh, out Material prefabMaterial);
+            GetObjectVisual(asset, out Mesh prefabMesh, out Material[] prefabMaterials);
 
             //Create billboard material
             Material billboardMaterial = null;
-            
-            if(asset.generatedMaterial == null)
+
+            if (asset.generatedMaterial == null)
                 billboardMaterial = new Material(settings.billboardShader);
             else
             {
@@ -85,11 +85,15 @@ namespace Ardenfall.Utilities
             }
 
             billboardMaterial.name = $"generatedMaterial_{asset.prefab.name}";
-            billboardMaterial.CopyPropertiesFromMaterial(prefabMaterial);
+
+            billboardMaterial.CopyPropertiesFromMaterial(prefabMaterials[0]);
             billboardMaterial.SetFloat("_Cutoff", asset.cutoff);
 
             for (int i = 0; i < bakedPassTextures.Count; i++)
+            {
                 billboardMaterial.SetTexture(settings.billboardTextures[i].textureId, bakedPassTextures[i]);
+
+            }
 
             //Save material
             if (asset.generatedMaterial == null)
@@ -105,7 +109,7 @@ namespace Ardenfall.Utilities
             generatedMesh.name = $"generatedMesh_{asset.prefab.name}";
 
             //Save mesh
-            if(asset.generatedMesh == null)
+            if (asset.generatedMesh == null)
             {
                 asset.generatedMesh = generatedMesh;
                 AssetDatabase.AddObjectToAsset(generatedMesh, AssetDatabase.GetAssetPath(asset));
@@ -119,7 +123,7 @@ namespace Ardenfall.Utilities
 
         public static Mesh GenerateBillboardMesh(BillboardAsset asset, Mesh existingMesh = null)
         {
-            if (!GetObjectVisual(asset, out Mesh prefabMesh, out Material prefabMaterial))
+            if (!GetObjectVisual(asset, out Mesh prefabMesh, out Material[] prefabMaterials))
                 return null;
 
             var extents = prefabMesh.bounds.extents;
@@ -181,7 +185,7 @@ namespace Ardenfall.Utilities
                  new Vector2(1, 1),
              };
 
-            mesh.triangles = new int[] { 
+            mesh.triangles = new int[] {
                 0, 1, 2, 0, 2, 3,
                 4, 5, 6, 4, 6, 7,
                 11, 10, 8, 10, 9, 8,
@@ -196,7 +200,7 @@ namespace Ardenfall.Utilities
 
         public static Vector2Int GetAtlasSize(BillboardAsset asset, int textureHeight)
         {
-            if (!GetObjectVisual(asset, out Mesh prefabMesh, out Material prefabMaterial))
+            if (!GetObjectVisual(asset, out Mesh prefabMesh, out Material[] prefabMaterials))
                 return Vector2Int.zero;
 
             var bounds = prefabMesh.bounds;
@@ -211,7 +215,7 @@ namespace Ardenfall.Utilities
 
         public static Texture2D RenderAtlas(BillboardAsset asset, int textureHeight, Shader overrideShader = null, MaterialOverrides renderOverrides = null)
         {
-            if (!GetObjectVisual(asset, out Mesh prefabMesh, out Material prefabMaterial))
+            if (!GetObjectVisual(asset, out Mesh prefabMesh, out Material[] prefabMaterials))
                 return null;
 
             //Create object
@@ -223,11 +227,19 @@ namespace Ardenfall.Utilities
 
             if (overrideShader != null)
             {
-                meshRenderer.sharedMaterial = new Material(overrideShader);
-                meshRenderer.sharedMaterial.CopyPropertiesFromMaterial(prefabMaterial);
+                Material[] materials = new Material[prefabMaterials.Length];
+                for (int i = 0; i < prefabMaterials.Length; i++)
+                {
+                    materials[i] = new Material(overrideShader);
+                    materials[i].CopyPropertiesFromMaterial(prefabMaterials[i]);
+                }
+                meshRenderer.SetSharedMaterials(new(materials));
             }
             else
-                meshRenderer.sharedMaterial = new Material(prefabMaterial);
+            {
+                meshRenderer.SetSharedMaterials(new(prefabMaterials));
+
+            }
 
             if (renderOverrides != null)
                 renderOverrides.OverrideMaterial(meshRenderer.sharedMaterial);
@@ -240,7 +252,7 @@ namespace Ardenfall.Utilities
 
             Texture2D[] textures = new Texture2D[4];
 
-            for(int i = 0; i < 4; i++)
+            for (int i = 0; i < 4; i++)
             {
                 Vector3 direction = i == 0 ? Vector3.forward : (i == 1 ? Vector3.left : (i == 2 ? Vector3.back : Vector3.right));
                 float dirSize = i == 0 || i == 2 ? bounds.size.x : bounds.size.z;
@@ -250,7 +262,7 @@ namespace Ardenfall.Utilities
 
                 UpdateCameraPosition(prefabMesh.bounds, camera, direction, (float)textureWidth / textureHeight);
                 var newTexture = Render(camera, textureWidth, textureHeight, TextureFormat.RGBA32);
-                
+
                 textures[i] = newTexture;
             }
 
@@ -261,11 +273,15 @@ namespace Ardenfall.Utilities
             //Stitch
             Texture2D atlasTexture = new Texture2D(textures[0].width + textures[1].width, textureHeight * 2, TextureFormat.RGBA32, false);
 
+
+
             atlasTexture.SetPixels(0, 0, textures[0].width, textures[0].height, textures[0].GetPixels());
             atlasTexture.SetPixels(textures[0].width, 0, textures[1].width, textures[1].height, textures[1].GetPixels());
             atlasTexture.SetPixels(0, textures[0].height, textures[2].width, textures[2].height, textures[2].GetPixels());
             atlasTexture.SetPixels(textures[0].width, textures[0].height, textures[3].width, textures[3].height, textures[3].GetPixels());
             atlasTexture.Apply();
+
+
 
             GameObject.DestroyImmediate(textures[0]);
             GameObject.DestroyImmediate(textures[1]);
@@ -345,7 +361,7 @@ namespace Ardenfall.Utilities
             return camera;
         }
 
-        private  static void UpdateCameraPosition(Bounds bounds, Camera camera, Vector3 direction, float aspect)
+        private static void UpdateCameraPosition(Bounds bounds, Camera camera, Vector3 direction, float aspect)
         {
             camera.aspect = aspect;
             camera.transform.position = bounds.center;
@@ -399,7 +415,6 @@ namespace Ardenfall.Utilities
 
             RenderTexture.active = temp;
             RenderTexture.ReleaseTemporary(renderTex);
-
             return result;
         }
 
@@ -420,7 +435,7 @@ namespace Ardenfall.Utilities
             }
         }
 
-        private static bool GetObjectVisual(BillboardAsset asset, out Mesh mesh, out Material material)
+        private static bool GetObjectVisual(BillboardAsset asset, out Mesh mesh, out Material[] material)
         {
             mesh = null;
             material = null;
@@ -448,7 +463,8 @@ namespace Ardenfall.Utilities
                     return false;
                 }
 
-                material = lodRenderer.sharedMaterial;
+
+                material = lodRenderer.sharedMaterials;
                 mesh = lodMeshFilter.sharedMesh;
                 return true;
             }
@@ -482,7 +498,7 @@ namespace Ardenfall.Utilities
                 return false;
             }
 
-            material = meshRenderer.sharedMaterial;
+            material = meshRenderer.sharedMaterials;
             mesh = meshFilter.sharedMesh;
             return true;
         }
